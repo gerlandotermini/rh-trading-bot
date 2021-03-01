@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -u
 
 # Crypto Trading Bot
-# Version: 1.5
+# Version: 1.5.1
 # Credits: https://github.com/JasonRBowling/cryptoTradingBot/
 
 from config import config
@@ -474,6 +474,8 @@ class bot:
         slice = self.data.loc[:, [ 'timestamp' ] + columns ]
         slice[ 'timestamp' ] = [ datetime.strptime( x, '%Y-%m-%d %H:%M').strftime( "%d@%H:%M" ) for x in slice[ 'timestamp' ] ]
         fig = slice.plot( x = 'timestamp', xlabel = 'Time', ylabel = '', figsize = ( 15, 5 ), fontsize = 13, linewidth = 0.8, alpha = 0.6 )
+        fig.set_yticks( np.arange( min( slice[ columns[ 0 ] ] ), max( slice[ columns[ 0 ] ] ), int( ( max( slice[ columns[ 0 ] ] ) - min( slice[ columns[ 0 ] ] ) ) / 20 ) ) )
+        fig.yaxis.set_tick_params( labelright = 'on' )
         fig.lines[ 0 ].set_alpha( 1 )
         fig.grid( linestyle = 'dotted', linewidth = '0.5' )
         fig = fig.get_figure()
