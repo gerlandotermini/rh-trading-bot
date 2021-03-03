@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -u
 
 # Crypto Trading Bot
-# Version: 1.5.1
+# Version: 1.5.2
 # Credits: https://github.com/JasonRBowling/cryptoTradingBot/
 
 from config import config
@@ -150,7 +150,7 @@ class bot:
         now = datetime.now()
 
         # We don't have enough consecutive data points to decide what to do
-        self.is_trading_locked = not self.get_new_data( now )
+        is_trading_locked = not self.get_new_data( now )
         
         if len( self.orders ) > 0:
             print( '-- Assets -------------------------------' )
@@ -195,11 +195,14 @@ class bot:
                         print( "{:<16}  {:<2}  {:<6}  {:<12}  {:<12}  {:<12}  {:<12}".format( 'Date/Time', 'St', 'Ticker', 'Quantity', 'Price', 'Cost', 'Value' ) )
                         is_table_header_printed = True
 
-                    print( "{:<16}  {:<2}  {:<6}  {:<12}  {:<12}  {:<12}  {:<12}".format( a_asset.timestamp.strftime( '%Y-%m-%d %H:%M' ), str( a_asset.status ), str( a_asset.ticker ), str( a_asset.quantity ), str( a_asset.price ), str( round( a_asset.price * a_asset.quantity, 3 ) ), str( round( self.data.iloc[ -1 ][ a_asset.ticker ] * a_asset.quantity, 3 ) ) ) )
+                    try:
+                        print( "{:<16}  {:<2}  {:<6}  {:<12}  {:<12}  {:<12}  {:<12}".format( a_asset.timestamp.strftime( '%Y-%m-%d %H:%M' ), str( a_asset.status ), str( a_asset.ticker ), str( a_asset.quantity ), str( a_asset.price ), str( round( a_asset.price * a_asset.quantity, 3 ) ), str( round( self.data.iloc[ -1 ][ a_asset.ticker ] * a_asset.quantity, 3 ) ) ) )
+                    except IndexError:
+                        print( "{:<16}  {:<2}  {:<6}  {:<12}  {:<12}  {:<12}  {:<12}".format( a_asset.timestamp.strftime( '%Y-%m-%d %H:%M' ), str( a_asset.status ), str( a_asset.ticker ), str( a_asset.quantity ), str( a_asset.price ), str( round( a_asset.price * a_asset.quantity, 3 ) ), 'N/A' ) )
 
                 if a_asset.status == 'B':
                     # Is it time to sell this asset? ( Stop-loss: is the current price below the purchase price by the percentage defined in the config file? )
-                    if getattr( self.signal, 'sell_' + str(  config[ 'trade_signals' ][ 'sell' ] ) )( a_asset, self.data ) or self.data.iloc[ -1 ][ a_asset.ticker ] < a_asset.price - ( a_asset.price * config[ 'stop_loss_threshold' ] ):
+                    if not is_trading_locked and ( getattr( self.signal, 'sell_' + str(  config[ 'trade_signals' ][ 'sell' ] ) )( a_asset, self.data ) or self.data.iloc[ -1 ][ a_asset.ticker ] < a_asset.price - ( a_asset.price * config[ 'stop_loss_threshold' ] ) ):
                         self.sell( a_asset )
                         # During the following iteration we will confirm if this limit order was actually executed, and update the available cash balance accordingly
 
@@ -208,7 +211,7 @@ class bot:
 
         # Is it time to buy something?
         for a_robinhood_ticker in config[ 'ticker_list' ].values():
-            if getattr( self.signal, 'buy_' + str(  config[ 'trade_signals' ][ 'buy' ] ) )( a_robinhood_ticker, self.data ) and self.buy( a_robinhood_ticker ):
+            if not is_trading_locked and getattr( self.signal, 'buy_' + str(  config[ 'trade_signals' ][ 'buy' ] ) )( a_robinhood_ticker, self.data ) and self.buy( a_robinhood_ticker ):
                 self.update_available_cash()              
 
         # Only track up to a fixed amount of data points
@@ -217,7 +220,7 @@ class bot:
         # Final status for this iteration
         print( '-- Bot Status ---------------------------' )
         print( 'Iteration completed on ' +str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) )
-        print( 'Buying power: $ ' + str( self.available_cash ) )
+        print( 'Buying power: $' + str( self.available_cash ) )
         print( '-- Data Snapshot ------------------------' )
         print( self.data.tail() )
 
@@ -234,7 +237,7 @@ class bot:
         timer_handle.join()
 
     def buy( self, ticker ):
-        if self.available_cash == 0 or self.available_cash < config[ 'buy_amount_per_trade' ] or self.is_trading_locked:
+        if self.available_cash == 0 or self.available_cash < config[ 'buy_amount_per_trade' ]:
             return False
         
         # Retrieve the actual ask price from Robinhood
@@ -277,10 +280,6 @@ class bot:
         return True
 
     def sell( self, asset ):
-        # Do we have enough of this asset to sell?
-        if self.is_trading_locked:
-            return False
-
         # Retrieve the actual bid price from Robinhood
         if not config[ 'simulate_api_calls' ]:
             try:
@@ -379,8 +378,8 @@ class bot:
 
     def get_new_data( self, now ):
         # If the current dataset has gaps in it, we refresh it from Kraken
-        if self.data_has_gaps( now ):
-            self.init_data()
+        if self.data_has_gaps( now ) and not self.init_data():
+            return False
 
         new_row = { 'timestamp': now.strftime( "%Y-%m-%d %H:%M" ) }
 
@@ -418,6 +417,7 @@ class bot:
             if ( self.data.tail( 4 )[ a_robinhood_ticker ].to_numpy()[ -1 ] == self.data.tail( 4 )[ a_robinhood_ticker ].to_numpy() ).all():
                 print( 'Repeating values detected for ' + str( a_robinhood_ticker ) + '. Ignoring data point.' )
                 self.data = self.data[:-1]
+                return False
 
             elif self.data.shape[ 0 ] > 0:
                 self.data[ a_robinhood_ticker + '_SMA_F' ] = self.data[ a_robinhood_ticker ].rolling( window = config[ 'moving_average_periods' ][ 'sma_fast' ] ).mean()
