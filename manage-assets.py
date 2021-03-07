@@ -79,8 +79,11 @@ if len( sys.argv ) > 1:
 
     # List all orders in the log
     if len( orders ) > 0:
+        profit = 0
         for count, i in enumerate( orders ):
-            if len( sys.argv ) <= 2 or sys.argv[ 1 ] != 'list' or ( len( sys.argv ) > 2 and sys.argv[ 2 ] == orders[ i ].status ):
+            if sys.argv[ 1 ] == 'profit':
+                profit += orders[ i ].profit
+            elif len( sys.argv ) <= 2 or sys.argv[ 1 ] != 'list' or ( len( sys.argv ) > 2 and sys.argv[ 2 ] == orders[ i ].status ):
                 print( "\n-- {:05d} -------------------------------".format( count + 1 ) )
                 print( "Date and time: {}\nID: {}\nStatus: {}\nTicker: {}\nQuantity: {}\nPrice: $ {}\nCost: $ {}".format(
                     orders[ i ].timestamp.strftime( '%Y-%m-%d %H:%M' ),
@@ -96,11 +99,14 @@ if len( sys.argv ) > 1:
                     print( 'Current Value: $ ' + str( round( data.iloc[ -1 ][ orders[ i ].ticker ] * orders[ i ].quantity, 3 ) ) )
                 elif orders[ i ].status in [ 'PS', 'S' ]:
                     print( 'Estimated Profit: $ ' + str( orders[ i ].profit ) )
+
+        if sys.argv[ 1 ] == 'profit':
+            print( 'Profit: $' + str( profit ) )
     else:
         print( 'No orders found.' )
 
 else:
-    print( 'Syntax: manage-asset.py buy ticker quantity price | sell asset_id sale_price | update_status order_id status | list' )
+    print( 'Syntax: manage-asset.py buy ticker quantity price | sell asset_id sale_price | update_status order_id status | list | csv | profit' )
     exit()
 
 with open( 'pickle/orders.pickle', 'wb' ) as f:
