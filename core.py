@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -u
 
 # Crypto Trading Bot
-# Version: 1.5.2
+# Version: 1.5.3
 # Credits: https://github.com/JasonRBowling/cryptoTradingBot/
 
 from config import config
@@ -59,9 +59,9 @@ class bot:
     data = pd.DataFrame()
     orders = {}
 
-    min_share_increments = {}  #the smallest increment of a coin you can buy/sell
-    min_price_increments = {}   #the smallest fraction of a dollar you can buy/sell a coin with
-    min_consecutive_samples = 0
+    min_share_increments = {}  # the smallest increment of a coin you can buy/sell
+    min_price_increments = {}   # the smallest fraction of a dollar you can buy/sell a coin with
+    api_error_counter = 0 # stop the bot if the API calls keep returning errors
     
     available_cash = 0
 
@@ -77,11 +77,6 @@ class bot:
             isDefined = config.get( c )
             if not isDefined:
                 config[ c ] = self.default_config[ c ]
-
-        if config[ 'rsi_period' ] > config[ 'moving_average_periods' ][ 'sma_fast' ]:
-            self.min_consecutive_samples = config[ 'rsi_period' ]
-        else:
-            self.min_consecutive_samples = config[ 'moving_average_periods' ][ 'sma_fast' ]
         
         for a_key, a_value in config.items():
             if ( a_key == 'username' or a_key == 'password' ):
@@ -128,6 +123,7 @@ class bot:
                     result = rh.get_crypto_info( a_robinhood_ticker )
                     self.min_share_increments.update( { a_robinhood_ticker: float( result[ 'min_order_quantity_increment' ] ) } )
                     self.min_price_increments.update( { a_robinhood_ticker: float( result[ 'min_order_price_increment' ] ) } )
+                    self.api_error_counter = 0
                 except:
                     print( 'Failed to get increments from RobinHood.' )
                     exit()
@@ -147,6 +143,10 @@ class bot:
         return
 
     def run( self ):
+        # If we've had more than 5 consecutive exceptions, something is wrong (authentication expired?): abort
+        if self.api_error_counter > 5:
+            exit()
+
         now = datetime.now()
 
         # We don't have enough consecutive data points to decide what to do
@@ -166,8 +166,10 @@ class bot:
                     if len( pending_orders ) == 0 and config[ 'trades_enabled' ] and not config[ 'simulate_api_calls' ]:
                         try:
                             pending_orders = rh.get_all_open_crypto_orders()
+                            self.api_error_counter = 0
                         except:
                             print( 'An exception occurred while retrieving list of pending orders.' )
+                            self.api_error_counter += 1
                             pending_orders = []
 
                     # Is this order still pending?
@@ -192,13 +194,13 @@ class bot:
                 # Print a summary of all confirmed assets
                 if a_asset.status in [ 'B', 'PB', 'PS' ]:
                     if not is_table_header_printed:
-                        print( "{:<16}  {:<2}  {:<6}  {:<12}  {:<12}  {:<12}  {:<12}".format( 'Date/Time', 'St', 'Ticker', 'Quantity', 'Price', 'Cost', 'Value' ) )
+                        print( "{:<16}  {:<6}  {:<12}  {:<12}  {:<12}  {:<12}".format( 'Date/Time', 'Ticker', 'Quantity', 'Price', 'Cost', 'Value' ) )
                         is_table_header_printed = True
 
                     try:
-                        print( "{:<16}  {:<2}  {:<6}  {:<12}  {:<12}  {:<12}  {:<12}".format( a_asset.timestamp.strftime( '%Y-%m-%d %H:%M' ), str( a_asset.status ), str( a_asset.ticker ), str( a_asset.quantity ), str( a_asset.price ), str( round( a_asset.price * a_asset.quantity, 3 ) ), str( round( self.data.iloc[ -1 ][ a_asset.ticker ] * a_asset.quantity, 3 ) ) ) )
+                        print( "{:<16}  {:<6}  {:<12}  {:<12}  {:<12}  {:<12}".format( a_asset.timestamp.strftime( '%Y-%m-%d %H:%M' ), str( a_asset.ticker ), str( a_asset.quantity ), str( a_asset.price ), str( round( a_asset.price * a_asset.quantity, 3 ) ), str( round( self.data.iloc[ -1 ][ a_asset.ticker ] * a_asset.quantity, 3 ) ) ) )
                     except IndexError:
-                        print( "{:<16}  {:<2}  {:<6}  {:<12}  {:<12}  {:<12}  {:<12}".format( a_asset.timestamp.strftime( '%Y-%m-%d %H:%M' ), str( a_asset.status ), str( a_asset.ticker ), str( a_asset.quantity ), str( a_asset.price ), str( round( a_asset.price * a_asset.quantity, 3 ) ), 'N/A' ) )
+                        print( "{:<16}  {:<6}  {:<12}  {:<12}  {:<12}  {:<12}".format( a_asset.timestamp.strftime( '%Y-%m-%d %H:%M' ), str( a_asset.ticker ), str( a_asset.quantity ), str( a_asset.price ), str( round( a_asset.price * a_asset.quantity, 3 ) ), 'N/A' ) )
 
                 if a_asset.status == 'B':
                     # Is it time to sell this asset? ( Stop-loss: is the current price below the purchase price by the percentage defined in the config file? )
@@ -245,8 +247,10 @@ class bot:
             try:
                 quote = rh.get_crypto_quote( ticker )
                 price = float( quote[ 'ask_price' ] )
+                self.api_error_counter = 0
             except:
                 print( 'Could not retrieve ask price from Robinhood. Using most recent value.' )
+                self.api_error_counter += 1
                 price = self.data.iloc[ -1 ][ ticker ]
         else:
             price = self.data.iloc[ -1 ][ ticker ]
@@ -270,8 +274,11 @@ class bot:
                 
                 if ( price != self.data.iloc[ -1 ][ ticker ] ):
                     print( '## Price Difference: Mark $' + str( self.data.iloc[ -1 ][ ticker ] ) + ', Ask $' + str( price ) )
+
+                self.api_error_counter = 0
             except:
                 print( 'An exception occurred while trying to buy.' )
+                self.api_error_counter += 1
                 return False
         else:
             print( '## Would have bought ' + str( ticker ) + ' ' + str( quantity ) + ' at $' + str( price_precision ) + ', if trades were enabled' )
@@ -285,8 +292,10 @@ class bot:
             try:
                 quote = rh.get_crypto_quote( asset.ticker )
                 price = float( quote[ 'bid_price' ] )
+                self.api_error_counter = 0
             except:
                 print( 'Could not retrieve bid price from Robinhood. Using most recent value.' )
+                self.api_error_counter += 1
                 price = self.data.iloc[ -1 ][ asset.ticker ]
         else:
             price = self.data.iloc[ -1 ][ asset.ticker ]
@@ -308,8 +317,11 @@ class bot:
             
                 if ( price != self.data.iloc[ -1 ][ asset.ticker ] ):
                     print( '## Price Difference: Mark $' + str( self.data.iloc[ -1 ][ asset.ticker ] ) + ', Bid $' + str( price ) )
+            
+                self.api_error_counter = 0
             except:
                 print( 'An exception occurred while trying to sell.' )
+                self.api_error_counter += 1
                 return False
         else:
             print( '## Would have sold ' + str( asset.ticker ) + ' ' + str( asset.quantity ) + ' at $' + str( price_precision ) + ', if trades were enabled' )
@@ -330,8 +342,10 @@ class bot:
 
         # Check for break in sequence of samples to minimum consecutive sample number
         position = len( self.data ) - 1
-        if position >= self.min_consecutive_samples:
-            for x in range( 0, self.min_consecutive_samples ):
+        min_consecutive_samples = max( config[ 'rsi_period' ], config[ 'moving_average_periods' ][ 'sma_fast' ] )
+
+        if position >= min_consecutive_samples:
+            for x in range( 0, min_consecutive_samples ):
                 timediff = datetime.strptime( self.data.iloc[ position - x ][ 'timestamp' ], '%Y-%m-%d %H:%M' ) - datetime.strptime( self.data.iloc[ position - ( x + 1 ) ][ 'timestamp' ], '%Y-%m-%d %H:%M' ) 
 
                 if timediff.seconds > ( config[ 'minutes_between_updates' ] + 1 ) * 120:
@@ -355,11 +369,13 @@ class bot:
                 result = get_json( 'https://api.kraken.com/0/public/OHLC?interval=' + str( config[ 'minutes_between_updates' ] ) + '&pair=' + a_kraken_ticker ).json()
                 historical_data = pd.DataFrame( result[ 'result' ][ a_kraken_ticker ] )
                 historical_data = historical_data[ [ 0, 1 ] ]
-                
+                self.api_error_counter = 0
+
                 # Be nice to the Kraken API
                 sleep( 3 )
             except:
                 print( 'An exception occurred retrieving historical data from Kraken.' )
+                self.api_error_counter += 1
                 return False
 
             # Convert timestamps
@@ -392,15 +408,20 @@ class bot:
 
                         if len( result[ 'error' ] ) == 0:
                             new_row[ a_robinhood_ticker ] = round( float( result[ 'result' ][ a_kraken_ticker ][ 'a' ][ 0 ] ), 3 )
+
+                        self.api_error_counter = 0
                     except:
                         print( 'An exception occurred retrieving prices from Kraken.' )
+                        self.api_error_counter += 1
                         return False
                 else:
                     try:
                         result = rh.get_crypto_quote( a_robinhood_ticker )
                         new_row[ a_robinhood_ticker ] = round( float( result[ 'mark_price' ] ), 3 )
+                        self.api_error_counter = 0
                     except:
                         print( 'An exception occurred retrieving prices from Robinhood.' )
+                        self.api_error_counter += 1
                         return False
             else:
                 new_row[ a_robinhood_ticker ] = round( float( randint( 400000, 500000 ) ), 3 )
@@ -441,8 +462,10 @@ class bot:
             try:
                 me = rh.account.load_phoenix_account( info=None )
                 self.available_cash = max( 0, round( float( me[ 'crypto_buying_power' ][ 'amount' ] ) - config[ 'reserve' ], 3 ) )
+                self.api_error_counter = 0
             except:
                 print( 'An exception occurred while reading available cash amount.' )
+                self.api_error_counter += 1
                 return False
         else:
             self.available_cash = randint( 400000, 500000 ) + config[ 'reserve' ]
@@ -455,8 +478,10 @@ class bot:
                 cancelResult = rh.cancel_crypto_order( order_id )
                 self.orders[ order_id ].status = 'C'
                 print( 'Cancelled order #' + str( order_id ) + '.' )
+                self.api_error_counter = 0
             except:
                 print( 'An exception occurred while attempting to cancel order #' + str( order_id ) + '.')
+                self.api_error_counter += 1
                 return False
 
         # Let Robinhood process this transaction
