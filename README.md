@@ -16,7 +16,7 @@ You'll need access to a working Python3 interpreter. For the sake of simplicity,
 * [Pandas](https://pandas.pydata.org/pandas-docs/stable/index.html): `pip3 install pandas`
 * [TA-Lib](https://www.ta-lib.org/): download their tarball and compile it
 
-Once you have all the dependencies in place, clone this repo somewhere on your machine, copy `config-sample.py` to `config.py`, and edit it to customize the bot's behavior:
+Once you have all the dependencies in place, clone this repo somewhere on your machine, copy `config-sample.py` to `config.py`, and `classes/signals-sample.py` to `classes/signals.py`. Then edit your config file to customize the bot's behavior:
 * (string) `username` and `password`: Robinhood credentials (optional, see **Running the bot** here below)
 * (bool) `trades_enabled`:  If False, run in test mode and just collect data, otherwise submit orders
 * (bool) `simulate_api_calls`: Simulate connections to Kraken and Robinhood APIs (by generating random values for all API calls)
@@ -47,10 +47,13 @@ If you have 2FA enabled, or you prefer not to store your Robinhood credentials i
 The overall flow looks like this:
 * Load the configuration and initialize or load a previously saved state
 * Load saved data points or download new ones from Kraken
-* Every 5 minutes (you can customize this in the settings), download the latest price info from Kraken for each coin
+* Every 5 minutes (you can customize this in the settings), download the latest price info for each coin
 * Compute [moving averages](https://www.investopedia.com/terms/m/movingaverage.asp) and [RSI](https://www.investopedia.com/terms/r/rsi.asp), making sure that there haven't been any interruptions in the data sequence
 * If the conditions to buy or sell are met, submit the corresponding order
 * Rinse and repeat
+
+## Adding your own signals
+The algorithm to determine if it's time to buy or sell an asset is defined in `classes/signals.py`. This file is not tracked in the git repository, so you are free to add your own strategies and analysis without the need to share it with the world. Of course, if you'd like to contribute to this project, feel free to submit a pull request for `classes/signals-sample.py` and I'll be happy to review it and add new strategies to the official code.
 
 ## Bot Status
 A summary of each iteration is logged in `status.log`. The bot maintains a list of purchased assets (saved as `orders.pickle`) and at each iteration, it determines if the conditions to sell any of them are met. It also handles swing and miss orders, by checking if any of the orders placed during the previous iteration are still pending (not filled), and cancels them. The typical output should resemble this format:
@@ -94,7 +97,7 @@ The RSI trading indicator is a measure of the relative strength of the market (c
 Moving average convergence divergence (MACD) is a trend-following momentum indicator that shows the relationship between two moving averages of a security’s price. The MACD is calculated by subtracting the 26-period [exponential moving average](https://www.investopedia.com/terms/e/ema.asp) (EMA) from the 12-period EMA. The result of that calculation is the MACD line. A nine-day EMA of the MACD called the "signal line," is then plotted on top of the MACD line, which can function as a trigger for buy and sell signals. Traders may buy the security when the MACD crosses above its signal line and sell—or short—the security when the MACD crosses below the signal line. Moving average convergence divergence (MACD) indicators can be interpreted in several ways, but the more common methods are crossovers, divergences, and rapid rises/falls.
 
 ## Technical Analysis
-This bot can implement any technical analysis as a series of conditions on the indicators it collects. Some of them are built into the algorithm, to give you a starting point to create your own. For example, Jason's approach is to buy when the price drops below the Fast-SMA by the percentage configured in the settings, and the RSI is below the threshold specified in the config file. By looking at multiple data points, you can also determine if a crossover happened, and act accordingly. The simple strategy outlined here above can be expanded [in many ways](https://medium.com/mudrex/rsi-trading-strategy-with-20-sma-on-mudrex-a26bd2ac039b). To that end, this bot keeps track of a few indicators that can be used to [determine if it's time to buy or sell](https://towardsdatascience.com/algorithmic-trading-with-macd-and-python-fef3d013e9f3): SMA fast, SMA slow, RSI, MACD, MACD Signal. Future versions will include ways to select which approach you would like to use. 
+This bot can implement any technical analysis as a series of conditions on the indicators it collects. Some of them are built into the algorithm, to give you a starting point to create your own. For example, Jason's approach is to buy when the price drops below the Fast-SMA by the percentage configured in the settings, and the RSI is below the threshold specified in the config file. By looking at multiple data points, you can also determine if a crossover happened, and act accordingly. The simple strategy outlined here above can be expanded [in many ways](https://medium.com/mudrex/rsi-trading-strategy-with-20-sma-on-mudrex-a26bd2ac039b). To that end, this bot keeps track of a few indicators that can be used to [determine if it's time to buy or sell](https://towardsdatascience.com/algorithmic-trading-with-macd-and-python-fef3d013e9f3): SMA fast, SMA slow, RSI, MACD, MACD Signal.
 
 ## Backtesting
 Backtesting is the process of testing a trading or investment strategy using data from the past to see how it would have performed. For example, let's say your trading strategy is to buy Bitcoin when it falls 3% in a day, your backtest software will check Bitcoin's prices in the past and fire a trade when it fell 3% in a day. The backtest results will show if the trades were profitable. Given that there are plenty of great [backtesting libraries](https://kernc.github.io/backtesting.py/doc/backtesting/#gsc.tab=0) already available out there, I didn't feel like reinventing the wheel. You can test your strategy there, and then convert it into the corresponding set of signals for the bot.

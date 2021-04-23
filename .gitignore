@@ -4,3 +4,4 @@ __pycache__
 *.pickle
 *.png
 config.py
+signals.py
