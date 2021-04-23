@@ -28,7 +28,10 @@ config = {
     },
     'buy_below_moving_average': 0.0075, # buy if price drops below Fast_MA by this percentage (0.75%)
     'profit_percentage': 0.01, # sell if price raises above purchase price by this percentage (1%)
-    'buy_amount_per_trade': 0, # if greater than zero, buy this amount of coin, otherwise use all the cash in the account
+    'buy_amount_per_trade': { # if greater than zero, buy no less/no more than this amount of coin, otherwise use all the cash in the account
+        'min': 0.0, 
+        'max': 0.0 
+    },
     'reserve': 0.0, # tell the bot if you don't want it to use all of the available cash in your account
     'stop_loss_threshold': 0.3,   # sell if the price drops at least 30% below the purchase price
 
