@@ -242,7 +242,7 @@ class bot:
         timer_handle.join()
 
     def buy( self, ticker ):
-        if self.available_cash == 0 or self.available_cash < config[ 'buy_amount_per_trade' ][ 'min' ] or self.available_cash > config[ 'buy_amount_per_trade' ][ 'max' ]:
+        if self.available_cash == 0 or self.available_cash < config[ 'buy_amount_per_trade' ][ 'min' ] or ( config[ 'buy_amount_per_trade' ][ 'max' ] > 0 and self.available_cash > config[ 'buy_amount_per_trade' ][ 'max' ] ):
             return False
         
         # Retrieve the actual ask price from Robinhood
