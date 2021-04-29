@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -u
 
 # Crypto Trading Bot
-# Version: 1.5.4
+# Version: 1.5.5
 # Credits: https://github.com/JasonRBowling/cryptoTradingBot/
 
 from config import config
@@ -146,8 +146,8 @@ class bot:
         return
 
     def run( self ):
-        # If we've had more than 5 consecutive exceptions, something is wrong (authentication expired?): abort
-        if self.api_error_counter > 5:
+        # If we've had more than 4 consecutive exceptions, something is wrong (authentication expired?): abort
+        if self.api_error_counter > 4:
             exit()
 
         now = datetime.now()
@@ -172,7 +172,7 @@ class bot:
                             self.api_error_counter = 0
                         except:
                             print( 'An exception occurred while retrieving list of pending orders.' )
-                            self.api_error_counter += 1
+                            self.api_error_counter = self.api_error_counter + 1
                             pending_orders = []
 
                     # Is this order still pending?
@@ -242,7 +242,7 @@ class bot:
         timer_handle.join()
 
     def buy( self, ticker ):
-        if self.available_cash == 0 or self.available_cash < config[ 'buy_amount_per_trade' ][ 'min' ] or ( config[ 'buy_amount_per_trade' ][ 'max' ] > 0 and self.available_cash > config[ 'buy_amount_per_trade' ][ 'max' ] ):
+        if self.available_cash == 0 or self.available_cash < config[ 'buy_amount_per_trade' ][ 'min' ]:
             return False
         
         # Retrieve the actual ask price from Robinhood
@@ -253,7 +253,7 @@ class bot:
                 self.api_error_counter = 0
             except:
                 print( 'Could not retrieve ask price from Robinhood. Using most recent value.' )
-                self.api_error_counter += 1
+                self.api_error_counter = self.api_error_counter + 1
                 price = self.data.iloc[ -1 ][ ticker ]
         else:
             price = self.data.iloc[ -1 ][ ticker ]
@@ -281,7 +281,7 @@ class bot:
                 self.api_error_counter = 0
             except:
                 print( 'An exception occurred while trying to buy.' )
-                self.api_error_counter += 1
+                self.api_error_counter = self.api_error_counter + 1
                 return False
         else:
             print( '## Would have bought ' + str( ticker ) + ' ' + str( quantity ) + ' at $' + str( price_precision ) + ', if trades were enabled' )
@@ -298,7 +298,7 @@ class bot:
                 self.api_error_counter = 0
             except:
                 print( 'Could not retrieve bid price from Robinhood. Using most recent value.' )
-                self.api_error_counter += 1
+                self.api_error_counter = self.api_error_counter + 1
                 price = self.data.iloc[ -1 ][ asset.ticker ]
         else:
             price = self.data.iloc[ -1 ][ asset.ticker ]
@@ -324,7 +324,7 @@ class bot:
                 self.api_error_counter = 0
             except:
                 print( 'An exception occurred while trying to sell.' )
-                self.api_error_counter += 1
+                self.api_error_counter = self.api_error_counter + 1
                 return False
         else:
             print( '## Would have sold ' + str( asset.ticker ) + ' ' + str( asset.quantity ) + ' at $' + str( price_precision ) + ', if trades were enabled' )
@@ -378,7 +378,7 @@ class bot:
                 sleep( 3 )
             except:
                 print( 'An exception occurred retrieving historical data from Kraken.' )
-                self.api_error_counter += 1
+                self.api_error_counter = self.api_error_counter + 1
                 return False
 
             # Convert timestamps
@@ -415,7 +415,7 @@ class bot:
                         self.api_error_counter = 0
                     except:
                         print( 'An exception occurred retrieving prices from Kraken.' )
-                        self.api_error_counter += 1
+                        self.api_error_counter = self.api_error_counter + 1
                         return False
                 else:
                     try:
@@ -424,7 +424,7 @@ class bot:
                         self.api_error_counter = 0
                     except:
                         print( 'An exception occurred retrieving prices from Robinhood.' )
-                        self.api_error_counter += 1
+                        self.api_error_counter = self.api_error_counter + 1
                         return False
             else:
                 new_row[ a_robinhood_ticker ] = round( float( randint( 400000, 500000 ) ), 3 )
@@ -468,7 +468,7 @@ class bot:
                 self.api_error_counter = 0
             except:
                 print( 'An exception occurred while reading available cash amount.' )
-                self.api_error_counter += 1
+                self.api_error_counter = self.api_error_counter + 1
                 return False
         else:
             self.available_cash = randint( 400000, 500000 ) + config[ 'reserve' ]
@@ -484,7 +484,7 @@ class bot:
                 self.api_error_counter = 0
             except:
                 print( 'An exception occurred while attempting to cancel order #' + str( order_id ) + '.')
-                self.api_error_counter += 1
+                self.api_error_counter = self.api_error_counter + 1
                 return False
 
         # Let Robinhood process this transaction
