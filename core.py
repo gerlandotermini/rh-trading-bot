@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -u
 
 # Crypto Trading Bot
-# Version: 1.5.5
+# Version: 1.6
 # Credits: https://github.com/JasonRBowling/cryptoTradingBot/
 
 from config import config
@@ -25,40 +25,58 @@ from time import sleep
 
 class bot:
     default_config = {
-        'username': '',
-        'password': '',
-        'trades_enabled': False,
-        'simulate_api_calls': False,
-        'data_source': 'robinhood',
+        'bot': {
+            'username': "",
+            'password': "",
+            'trades_enabled': False,
+            'simulate_api_calls': False,
+            'data_source': 'robinhood',
+            'minutes_between_updates': 5,
+            'cancel_pending_after_minutes': 20,
+            'save_charts': True,
+            'max_data_rows': 2000
+        },
         'ticker_list': {
             'XETHZUSD': 'ETH'
         },
         'trade_signals': {
-            'buy': 'sma_rsi_threshold',
-            'sell': 'above_buy'
+            'buy': {
+                'function': 'sma_rsi_threshold',
+                'params': {
+                    'buy_below_moving_average': 0.0075,
+                    'rsi_threshold': 40
+                }
+            },
+            'sell': {
+                'function': 'above_buy',
+                'params': {
+                    'profit_percentage': 0.01,
+                    'rsi_threshold': 70
+                }
+            }
         },
-        'buy_below_moving_average': 0.0075,
-        'profit_percentage': 0.01,
-        'buy_amount_per_trade': {
-            0.0,
-            0.0
+        'ta': {
+            'moving_average_periods': {
+                'sma_fast': 12, # 12 data points per hour
+                'sma_slow': 48,
+                'ema_fast': 12,
+                'ema_slow': 48,
+                'macd_fast': 12,
+                'macd_slow': 26,
+                'macd_signal': 7
+            },
+            'rsi_period': 14
         },
-        'moving_average_periods': {
-            'sma_fast': 48, # 12 data points per hour, 4 hours worth of data
-            'sma_slow': 192,
-            'macd_fast': 48,
-            'macd_slow': 104, # MACD 12/26 -> 48/104
-            'macd_signal': 28
-        },
-        'rsi_period': 48,
-        'rsi_threshold': 39.5,
-        'reserve': 0.0,
-        'stop_loss_threshold': 0.3,
-        'minutes_between_updates': 5,
-        'cancel_pending_after_minutes': 20,
-        'save_charts': True,
-        'max_data_rows': 10000
+        'assets': {
+            'buy_amount_per_trade': {
+                'min': 0.0,
+                'max': 0.0
+            },
+            'reserve': 0.0,
+            'stop_loss_threshold': 0.3,
+        }
     }
+
     data = pd.DataFrame()
     orders = {}
 
@@ -75,18 +93,11 @@ class bot:
         pd.set_option( 'display.max_columns', None )
         pd.set_option( 'display.width', 300 )
 
-        print( '-- Configuration ------------------------' )
         for c in self.default_config:
             isDefined = config.get( c )
             if not isDefined:
                 config[ c ] = self.default_config[ c ]
         
-        for a_key, a_value in config.items():
-            if ( a_key == 'username' or a_key == 'password' ):
-                continue
-
-            print( a_key.replace( '_', ' ' ).capitalize(), ': ', a_value, sep='' )
-
         print( '-- Init Environment ---------------------' )
 
         # Initialize folders where to store data and charts
@@ -111,17 +122,17 @@ class bot:
             self.data = pd.read_pickle( 'pickle/dataframe.pickle' )
 
         # Connect to Robinhood
-        if not config[ 'simulate_api_calls' ]:
+        if not config[ 'bot' ][ 'simulate_api_calls' ]:
             try:
                 print( 'Logging in to Robinhood' )
-                rh_response = rh.login( config[ 'username' ], config[ 'password' ],  )
+                rh_response = rh.login( config[ 'bot' ][ 'username' ], config[ 'bot' ][ 'password' ],  )
             except:
                 print( 'Got exception while attempting to log into Robinhood.' )
                 exit()
 
         # Download Robinhood parameters
         for a_robinhood_ticker in config[ 'ticker_list' ].values():
-            if not config[ 'simulate_api_calls' ]:
+            if not config[ 'bot' ][ 'simulate_api_calls' ]:
                 try:
                     result = rh.get_crypto_info( a_robinhood_ticker )
                     self.min_share_increments.update( { a_robinhood_ticker: float( result[ 'min_order_quantity_increment' ] ) } )
@@ -166,7 +177,7 @@ class bot:
                     print( 'Checking pending orders' )
 
                     # Retrieve the list of pending orders, if we haven't already
-                    if len( pending_orders ) == 0 and config[ 'trades_enabled' ] and not config[ 'simulate_api_calls' ]:
+                    if len( pending_orders ) == 0 and config[ 'bot' ][ 'trades_enabled' ] and not config[ 'bot' ][ 'simulate_api_calls' ]:
                         try:
                             pending_orders = rh.get_all_open_crypto_orders()
                             self.api_error_counter = 0
@@ -183,7 +194,7 @@ class bot:
 
                     # Was this asset marked as "to be cancelled?"
                     timediff = now - a_asset.timestamp
-                    if a_asset.status in [ 'CPB', 'CPS' ] and timediff.seconds > config[ 'cancel_pending_after_minutes' ] * 60:
+                    if a_asset.status in [ 'CPB', 'CPS' ] and timediff.seconds > config[ 'bot' ][ 'cancel_pending_after_minutes' ] * 60:
                         self.cancel_order( a_asset.order_id )
                     else:
                         # If it wasn't marked as 'to be cancelled', the order can be confirmed (remove the 'P' in front of the status)
@@ -207,7 +218,7 @@ class bot:
 
                 if a_asset.status == 'B':
                     # Is it time to sell this asset? ( Stop-loss: is the current price below the purchase price by the percentage defined in the config file? )
-                    if not is_trading_locked and ( getattr( self.signal, 'sell_' + str(  config[ 'trade_signals' ][ 'sell' ] ) )( a_asset, self.data ) or self.data.iloc[ -1 ][ a_asset.ticker ] < a_asset.price - ( a_asset.price * config[ 'stop_loss_threshold' ] ) ):
+                    if not is_trading_locked and ( getattr( self.signal, 'sell_' + str(  config[ 'trade_signals' ][ 'sell' ][ 'function' ] ) )( a_asset, self.data ) or self.data.iloc[ -1 ][ a_asset.ticker ] < a_asset.price - ( a_asset.price * config[ 'assets' ][ 'stop_loss_threshold' ] ) ):
                         self.sell( a_asset )
                         # During the following iteration we will confirm if this limit order was actually executed, and update the available cash balance accordingly
 
@@ -216,11 +227,11 @@ class bot:
 
         # Is it time to buy something?
         for a_robinhood_ticker in config[ 'ticker_list' ].values():
-            if not is_trading_locked and getattr( self.signal, 'buy_' + str(  config[ 'trade_signals' ][ 'buy' ] ) )( a_robinhood_ticker, self.data ) and self.buy( a_robinhood_ticker ):
+            if not is_trading_locked and getattr( self.signal, 'buy_' + str(  config[ 'trade_signals' ][ 'buy' ][ 'function' ] ) )( a_robinhood_ticker, self.data ) and self.buy( a_robinhood_ticker ):
                 self.update_available_cash()              
 
         # Only track up to a fixed amount of data points
-        self.data = self.data.tail( config[ 'max_data_rows' ] )
+        self.data = self.data.tail( config[ 'bot' ][ 'max_data_rows' ] )
 
         # Final status for this iteration
         print( '-- Bot Status ---------------------------' )
@@ -236,17 +247,17 @@ class bot:
         self.data.to_pickle( 'pickle/dataframe.pickle' )
 
         # Schedule the next iteration
-        timer_handle = Timer( config[ 'minutes_between_updates' ] * 60, self.run )
+        timer_handle = Timer( config[ 'bot' ][ 'minutes_between_updates' ] * 60, self.run )
         timer_handle.daemon = True
         timer_handle.start()
         timer_handle.join()
 
     def buy( self, ticker ):
-        if self.available_cash == 0 or self.available_cash < config[ 'buy_amount_per_trade' ][ 'min' ] or ( config[ 'buy_amount_per_trade' ][ 'max' ] > 0 and self.available_cash < config[ 'buy_amount_per_trade' ][ 'max' ] ):
+        if self.available_cash == 0 or self.available_cash < config[ 'assets' ][ 'buy_amount_per_trade' ][ 'min' ] or ( config[ 'assets' ][ 'buy_amount_per_trade' ][ 'max' ] > 0 and self.available_cash < config[ 'assets' ][ 'buy_amount_per_trade' ][ 'max' ] ):
             return False
         
         # Retrieve the actual ask price from Robinhood
-        if not config[ 'simulate_api_calls' ]:
+        if not config[ 'bot' ][ 'simulate_api_calls' ]:
             try:
                 quote = rh.get_crypto_quote( ticker )
                 price = float( quote[ 'ask_price' ] )
@@ -263,10 +274,10 @@ class bot:
         price_precision = round( floor( price / self.min_price_increments[ ticker ] ) * self.min_price_increments[ ticker ], 7 )
         
         # How much to buy depends on the configuration
-        quantity = ( self.available_cash if ( config[ 'buy_amount_per_trade' ][ 'max' ] == 0 ) else config[ 'buy_amount_per_trade' ][ 'max' ] ) / price_precision
+        quantity = ( self.available_cash if ( config[ 'assets' ][ 'buy_amount_per_trade' ][ 'max' ] == 0 ) else config[ 'assets' ][ 'buy_amount_per_trade' ][ 'max' ] ) / price_precision
         quantity = round( floor( quantity / self.min_share_increments[ ticker ] ) * self.min_share_increments[ ticker ], 7 )
 
-        if config[ 'trades_enabled' ] and not config[ 'simulate_api_calls' ]:
+        if config[ 'bot' ][ 'trades_enabled' ] and not config[ 'bot' ][ 'simulate_api_calls' ]:
             try:
                 buy_info = rh.order_buy_crypto_limit( str( ticker ), quantity, price_precision )
 
@@ -291,7 +302,7 @@ class bot:
 
     def sell( self, asset ):
         # Retrieve the actual bid price from Robinhood
-        if not config[ 'simulate_api_calls' ]:
+        if not config[ 'bot' ][ 'simulate_api_calls' ]:
             try:
                 quote = rh.get_crypto_quote( asset.ticker )
                 price = float( quote[ 'bid_price' ] )
@@ -308,7 +319,7 @@ class bot:
         price_precision = round( floor( price / self.min_price_increments[ asset.ticker ] ) * self.min_price_increments[ asset.ticker ], 7 )
         profit = round( ( asset.quantity * price_precision ) - ( asset.quantity * asset.price ), 3 )
 
-        if config[ 'trades_enabled' ] and not config[ 'simulate_api_calls' ]:
+        if config[ 'bot' ][ 'trades_enabled' ] and not config[ 'bot' ][ 'simulate_api_calls' ]:
             try:
                 sell_info = rh.order_sell_crypto_limit( str( asset.ticker ), asset.quantity, price_precision )
 
@@ -337,21 +348,21 @@ class bot:
             return True
 
         # Check for break between now and last sample
-        timediff = now - datetime.strptime( self.data.iloc[ -1 ][ 'timestamp' ], '%Y-%m-%d %H:%M' )
+        timediff = now - self.data.iloc[ -1 ][ 'timestamp' ]
 
         # Not enough data points available or it's been too long since we recorded any data
-        if timediff.seconds > ( config[ 'minutes_between_updates' ] + 1 ) * 120:
+        if timediff.seconds > ( config[ 'bot' ][ 'minutes_between_updates' ] + 1 ) * 120:
             return True
 
         # Check for break in sequence of samples to minimum consecutive sample number
         position = len( self.data ) - 1
-        min_consecutive_samples = max( config[ 'rsi_period' ], config[ 'moving_average_periods' ][ 'sma_fast' ] )
+        min_consecutive_samples = max( config[ 'ta' ][ 'rsi_period' ], config[ 'ta' ][ 'moving_average_periods' ][ 'sma_fast' ] )
 
         if position >= min_consecutive_samples:
             for x in range( 0, min_consecutive_samples ):
-                timediff = datetime.strptime( self.data.iloc[ position - x ][ 'timestamp' ], '%Y-%m-%d %H:%M' ) - datetime.strptime( self.data.iloc[ position - ( x + 1 ) ][ 'timestamp' ], '%Y-%m-%d %H:%M' ) 
+                timediff = self.data.iloc[ position - x ][ 'timestamp' ] - self.data.iloc[ position - ( x + 1 ) ][ 'timestamp' ] 
 
-                if timediff.seconds > ( config[ 'minutes_between_updates' ] + 1 ) * 120:
+                if timediff.seconds > ( config[ 'bot' ][ 'minutes_between_updates' ] + 1 ) * 120:
                     return True
 
         return False
@@ -369,7 +380,7 @@ class bot:
 
         for a_kraken_ticker, a_robinhood_ticker in config[ 'ticker_list' ].items():
             try:
-                result = get_json( 'https://api.kraken.com/0/public/OHLC?interval=' + str( config[ 'minutes_between_updates' ] ) + '&pair=' + a_kraken_ticker ).json()
+                result = get_json( 'https://api.kraken.com/0/public/OHLC?interval=' + str( config[ 'bot' ][ 'minutes_between_updates' ] ) + '&pair=' + a_kraken_ticker ).json()
                 historical_data = pd.DataFrame( result[ 'result' ][ a_kraken_ticker ] )
                 historical_data = historical_data[ [ 0, 1 ] ]
                 self.api_error_counter = 0
@@ -382,30 +393,30 @@ class bot:
                 return False
 
             # Convert timestamps
-            self.data[ 'timestamp' ] = [ datetime.fromtimestamp( x ).strftime( "%Y-%m-%d %H:%M" ) for x in historical_data[ 0 ] ] 
+            self.data[ 'timestamp' ] = [ pd.Timestamp( datetime.fromtimestamp( x ).strftime( "%Y-%m-%d %H:%M" ) ) for x in historical_data[ 0 ] ]
 
             # Copy the data
             self.data[ a_robinhood_ticker ] = [ round( float( x ), 3 ) for x in historical_data[ 1 ] ]
 
             # Calculate the indicators
-            self.data[ a_robinhood_ticker + '_SMA_F' ] = self.data[ a_robinhood_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 'sma_fast' ] ).mean()
-            self.data[ a_robinhood_ticker + '_SMA_S' ] = self.data[ a_robinhood_ticker ].shift( 1 ).rolling( window = config[ 'moving_average_periods' ][ 'sma_slow' ] ).mean()
-            self.data[ a_robinhood_ticker + '_EMA_F' ] = self.data[ a_robinhood_ticker ].ewm( span = config[ 'moving_average_periods' ][ 'ema_fast' ], adjust = False, min_periods = config[ 'moving_average_periods' ][ 'ema_fast' ]).mean()
-            self.data[ a_robinhood_ticker + '_EMA_S' ] = self.data[ a_robinhood_ticker ].ewm( span = config[ 'moving_average_periods' ][ 'ema_slow' ], adjust = False, min_periods = config[ 'moving_average_periods' ][ 'ema_slow' ]).mean()
-            self.data[ a_robinhood_ticker + '_RSI' ] = RSI( self.data[ a_robinhood_ticker ].values, timeperiod = config[ 'rsi_period' ] )
-            self.data[ a_robinhood_ticker + '_MACD' ], self.data[ a_robinhood_ticker + '_MACD_S' ], macd_hist = MACD( self.data[ a_robinhood_ticker ].values, fastperiod = config[ 'moving_average_periods' ][ 'macd_fast' ], slowperiod = config[ 'moving_average_periods' ][ 'macd_slow' ], signalperiod = config[ 'moving_average_periods' ][ 'macd_signal' ] )
+            self.data[ a_robinhood_ticker + '_SMA_F' ] = self.data[ a_robinhood_ticker ].shift( 1 ).rolling( window = config[ 'ta' ][ 'moving_average_periods' ][ 'sma_fast' ] ).mean()
+            self.data[ a_robinhood_ticker + '_SMA_S' ] = self.data[ a_robinhood_ticker ].shift( 1 ).rolling( window = config[ 'ta' ][ 'moving_average_periods' ][ 'sma_slow' ] ).mean()
+            self.data[ a_robinhood_ticker + '_EMA_F' ] = self.data[ a_robinhood_ticker ].ewm( span = config[ 'ta' ][ 'moving_average_periods' ][ 'ema_fast' ], adjust = False, min_periods = config[ 'ta' ][ 'moving_average_periods' ][ 'ema_fast' ]).mean()
+            self.data[ a_robinhood_ticker + '_EMA_S' ] = self.data[ a_robinhood_ticker ].ewm( span = config[ 'ta' ][ 'moving_average_periods' ][ 'ema_slow' ], adjust = False, min_periods = config[ 'ta' ][ 'moving_average_periods' ][ 'ema_slow' ]).mean()
+            self.data[ a_robinhood_ticker + '_RSI' ] = RSI( self.data[ a_robinhood_ticker ].values, timeperiod = config[ 'ta' ][ 'rsi_period' ] )
+            self.data[ a_robinhood_ticker + '_MACD' ], self.data[ a_robinhood_ticker + '_MACD_S' ], macd_hist = MACD( self.data[ a_robinhood_ticker ].values, fastperiod = config[ 'ta' ][ 'moving_average_periods' ][ 'macd_fast' ], slowperiod = config[ 'ta' ][ 'moving_average_periods' ][ 'macd_slow' ], signalperiod = config[ 'ta' ][ 'moving_average_periods' ][ 'macd_signal' ] )
 
     def get_new_data( self, now ):
         # If the current dataset has gaps in it, we refresh it from Kraken
         if self.data_has_gaps( now ) and not self.init_data():
             return False
 
-        new_row = { 'timestamp': now.strftime( "%Y-%m-%d %H:%M" ) }
+        new_row = { 'timestamp': pd.Timestamp.now }
 
         # Calculate moving averages and RSI values
         for a_kraken_ticker, a_robinhood_ticker in config[ 'ticker_list' ].items():
-            if not config[ 'simulate_api_calls' ]:
-                if config[ 'data_source' ] == 'kraken':
+            if not config[ 'bot' ][ 'simulate_api_calls' ]:
+                if config[ 'bot' ][ 'data_source' ] == 'kraken':
                     try:
                         result = get_json( 'https://api.kraken.com/0/public/Ticker?pair=' + str( a_kraken_ticker ) ).json()
 
@@ -429,7 +440,7 @@ class bot:
             else:
                 new_row[ a_robinhood_ticker ] = round( float( randint( 400000, 500000 ) ), 3 )
 
-            # If the new price is more than 40% lower/higher than the previous reading, assume it's an error somewhere
+            # If the new price is more than 30% lower/higher than the previous reading, assume an error somewhere
             percent_diff = ( abs( new_row[ a_robinhood_ticker ] - self.data.iloc[ -1 ][ a_robinhood_ticker ] ) / self.data.iloc[ -1 ][ a_robinhood_ticker ] ) * 100
             if percent_diff > 30:
                 print( 'Error: new price ($' + str( new_row[ a_robinhood_ticker ] ) + ') differs ' + str( round( percent_diff, 2 ) ) + '% from previous value, ignoring.' )
@@ -444,15 +455,15 @@ class bot:
                 return False
 
             elif self.data.shape[ 0 ] > 0:
-                self.data[ a_robinhood_ticker + '_SMA_F' ] = self.data[ a_robinhood_ticker ].rolling( window = config[ 'moving_average_periods' ][ 'sma_fast' ] ).mean()
-                self.data[ a_robinhood_ticker + '_SMA_S' ] = self.data[ a_robinhood_ticker ].rolling( window = config[ 'moving_average_periods' ][ 'sma_slow' ] ).mean()
-                self.data[ a_robinhood_ticker + '_SMA_S' ] = self.data[ a_robinhood_ticker ].rolling( window = config[ 'moving_average_periods' ][ 'sma_slow' ] ).mean()
-                self.data[ a_robinhood_ticker + '_EMA_F' ] = self.data[ a_robinhood_ticker ].ewm( span = config[ 'moving_average_periods' ][ 'ema_fast' ], adjust = False, min_periods = config[ 'moving_average_periods' ][ 'ema_fast' ]).mean()
-                self.data[ a_robinhood_ticker + '_EMA_S' ] = self.data[ a_robinhood_ticker ].ewm( span = config[ 'moving_average_periods' ][ 'ema_slow' ], adjust = False, min_periods = config[ 'moving_average_periods' ][ 'ema_slow' ]).mean()
-                self.data[ a_robinhood_ticker + '_RSI' ] = RSI( self.data[ a_robinhood_ticker ].values, timeperiod = config[ 'rsi_period' ] )
-                self.data[ a_robinhood_ticker + '_MACD' ], self.data[ a_robinhood_ticker + '_MACD_S' ], macd_hist = MACD( self.data[ a_robinhood_ticker ].values, fastperiod = config[ 'moving_average_periods' ][ 'macd_fast' ], slowperiod = config[ 'moving_average_periods' ][ 'macd_slow' ], signalperiod = config[ 'moving_average_periods' ][ 'macd_signal' ] )
+                self.data[ a_robinhood_ticker + '_SMA_F' ] = self.data[ a_robinhood_ticker ].rolling( window = config[ 'ta' ][ 'moving_average_periods' ][ 'sma_fast' ] ).mean()
+                self.data[ a_robinhood_ticker + '_SMA_S' ] = self.data[ a_robinhood_ticker ].rolling( window = config[ 'ta' ][ 'moving_average_periods' ][ 'sma_slow' ] ).mean()
+                self.data[ a_robinhood_ticker + '_SMA_S' ] = self.data[ a_robinhood_ticker ].rolling( window = config[ 'ta' ][ 'moving_average_periods' ][ 'sma_slow' ] ).mean()
+                self.data[ a_robinhood_ticker + '_EMA_F' ] = self.data[ a_robinhood_ticker ].ewm( span = config[ 'ta' ][ 'moving_average_periods' ][ 'ema_fast' ], adjust = False, min_periods = config[ 'ta' ][ 'moving_average_periods' ][ 'ema_fast' ]).mean()
+                self.data[ a_robinhood_ticker + '_EMA_S' ] = self.data[ a_robinhood_ticker ].ewm( span = config[ 'ta' ][ 'moving_average_periods' ][ 'ema_slow' ], adjust = False, min_periods = config[ 'ta' ][ 'moving_average_periods' ][ 'ema_slow' ]).mean()
+                self.data[ a_robinhood_ticker + '_RSI' ] = RSI( self.data[ a_robinhood_ticker ].values, timeperiod = config[ 'ta' ][ 'rsi_period' ] )
+                self.data[ a_robinhood_ticker + '_MACD' ], self.data[ a_robinhood_ticker + '_MACD_S' ], macd_hist = MACD( self.data[ a_robinhood_ticker ].values, fastperiod = config[ 'ta' ][ 'moving_average_periods' ][ 'macd_fast' ], slowperiod = config[ 'ta' ][ 'moving_average_periods' ][ 'macd_slow' ], signalperiod = config[ 'ta' ][ 'moving_average_periods' ][ 'macd_signal' ] )
 
-            if config[ 'save_charts' ] == True:
+            if config[ 'bot' ][ 'save_charts' ] == True:
                 self.save_chart( [ a_robinhood_ticker, str( a_robinhood_ticker ) + '_SMA_F', str( a_robinhood_ticker ) + '_SMA_S' ], str( a_robinhood_ticker ) + '_sma' )
                 self.save_chart( [ a_robinhood_ticker, str( a_robinhood_ticker ) + '_EMA_F', str( a_robinhood_ticker ) + '_EMA_S' ], str( a_robinhood_ticker ) + '_ema' )
                 self.save_chart_rescale( [ a_robinhood_ticker, str( a_robinhood_ticker ) + '_RSI' ], str( a_robinhood_ticker ) + '_rsi' )
@@ -461,22 +472,22 @@ class bot:
         return True
 
     def update_available_cash( self ):
-        if not config[ 'simulate_api_calls' ]:
+        if not config[ 'bot' ][ 'simulate_api_calls' ]:
             try:
                 me = rh.account.load_phoenix_account( info=None )
-                self.available_cash = max( 0, round( float( me[ 'crypto_buying_power' ][ 'amount' ] ) - config[ 'reserve' ], 3 ) )
+                self.available_cash = max( 0, round( float( me[ 'crypto_buying_power' ][ 'amount' ] ) - config[ 'assets' ][ 'reserve' ], 3 ) )
                 self.api_error_counter = 0
             except:
                 print( 'An exception occurred while reading available cash amount.' )
                 self.api_error_counter = self.api_error_counter + 1
                 return False
         else:
-            self.available_cash = randint( 400000, 500000 ) + config[ 'reserve' ]
+            self.available_cash = randint( 400000, 500000 ) + config[ 'assets' ][ 'reserve' ]
 
         return True
 
     def cancel_order( self, order_id ):
-        if not config[ 'simulate_api_calls' ]:
+        if not config[ 'bot' ][ 'simulate_api_calls' ]:
             try:
                 cancelResult = rh.cancel_crypto_order( order_id )
                 self.orders[ order_id ].status = 'C'
@@ -500,7 +511,7 @@ class bot:
             return False
 
         slice = self.data.loc[:, [ 'timestamp' ] + columns ]
-        slice[ 'timestamp' ] = [ datetime.strptime( x, '%Y-%m-%d %H:%M').strftime( "%d@%H:%M" ) for x in slice[ 'timestamp' ] ]
+        # slice[ 'timestamp' ] = [ datetime.strptime( x, '%Y-%m-%d %H:%M').strftime( "%d@%H:%M" ) for x in slice[ 'timestamp' ] ]
         fig = slice.plot( x = 'timestamp', xlabel = 'Time', ylabel = '', figsize = ( 15, 5 ), fontsize = 13, linewidth = 0.8, alpha = 0.6 )
         fig.set_yticks( np.arange( min( slice[ columns[ 0 ] ] ), max( slice[ columns[ 0 ] ] ), int( ( max( slice[ columns[ 0 ] ] ) - min( slice[ columns[ 0 ] ] ) ) / 20 ) ) )
         fig.yaxis.set_tick_params( labelright = 'on' )
@@ -516,7 +527,7 @@ class bot:
 
         ax = {}
         slice = self.data.loc[:, [ 'timestamp' ] + columns ]
-        slice[ 'timestamp' ] = [ datetime.strptime( x, '%Y-%m-%d %H:%M').strftime( "%d@%H:%M" ) for x in slice[ 'timestamp' ] ]
+        # slice[ 'timestamp' ] = [ datetime.strptime( x, '%Y-%m-%d %H:%M').strftime( "%d@%H:%M" ) for x in slice[ 'timestamp' ] ]
 
         fig = plt.figure( figsize = ( 15, 5 ), dpi = 300 )
         fig.subplots_adjust( right = 1 - ( len( columns ) * 0.1 ) )

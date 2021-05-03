@@ -21,20 +21,17 @@ Once you have all the dependencies in place, clone this repo somewhere on your m
 * (bool) `trades_enabled`:  If False, run in test mode and just collect data, otherwise submit orders
 * (bool) `simulate_api_calls`: Simulate connections to Kraken and Robinhood APIs (by generating random values for all API calls)
 * (string) `data_source`: Choose which service to use to track prices
-* (list) `ticker_list`: List of coin ticker pairs Kraken/Robinhood (XETHZUSD/ETH, etc); see [here](https://api.kraken.com/0/public/AssetPairs) for a complete list of available tickers on Kraken
-* (dict) `trade_signals`: Select which strategies to use (buy, sell); see _signals.py_ for a list of available methods (omit the *buy_*/*sell_* method prefix when passing the value here: buy_sma_crossover_rsi -> sma_crossover_rsi)
-* (float) `buy_below_moving_average`: Used by one of the built-in signals (sma_rsi_threshold), if the price dips below the MA by this percentage, and if the RSI is below the oversold threshold (see below), it will try to buy
-* (float) `sell_above_buy_price`: Used by some of the sell signals, once the price rises above the Buy price by this percentage, it will try to sell
-* (float) `buy_amount_per_trade`: If greater than zero, buy this amount of dollars, otherwise use all the cash in the account
-* (dict) `moving_average_periods`: Number of MA observations to wait before sprinting into action, for each measure (SMA fast, SMA slow, MACD fast, MACD slow, MACD signal)
-* (int) `rsi_period`: Length of the observation window for calculating the RSI
-* (float) `rsi_buy_threshold`: Threshold below which the bot will try to buy
-* (float) `reserve`: By default, the bot will try to use all the funds available in your account to buy crypto; use this value if you want to set aside a given amount that the bot should not spend
-* (float) `stop_loss_threshold`: Threshold below which the bot will sell its holdings, regardless of any gains
 * (int) `minutes_between_updates`: How often should the bot spring into action (1 (default), 5, 15, 30, 60, 240, 1440, 10080, 21600)
 * (int) `cancel_pending_after_minutes`: How long to wait before cancelling an order that hasn't been filled
 * (bool) `save_charts`: Enable this feature to have the bot save SMA charts for each coin it's handling
 * (int) `max_data_rows`: Max number of data points to store in the Pickle file (if you have issues with memory limits on your machine). 1k rows = 70kB
+* (list) `ticker_list`: List of coin ticker pairs Kraken/Robinhood (XETHZUSD/ETH, etc); see [here](https://api.kraken.com/0/public/AssetPairs) for a complete list of available tickers on Kraken
+* (dict) `trade_signals`: Select which strategies to use (buy, sell); see _signals.py_ for a list of available methods (omit the *buy_*/*sell_* method prefix when passing the value here: buy_sma_crossover_rsi -> sma_crossover_rsi)
+* (dict) `moving_average_periods`: Number of MA observations to wait before sprinting into action, for each measure (SMA fast, SMA slow, MACD fast, MACD slow, MACD signal)
+* (int) `rsi_period`: Length of the observation window for calculating the RSI
+* (float) `buy_amount_per_trade`: If greater than zero, buy this amount of dollars, otherwise use all the cash in the account
+* (float) `reserve`: By default, the bot will try to use all the funds available in your account to buy crypto; use this value if you want to set aside a given amount that the bot should not spend
+* (float) `stop_loss_threshold`: Threshold below which the bot will sell its holdings, regardless of any gains
 
 ## Running the bot
 If you have 2FA enabled, or you prefer not to store your Robinhood credentials in a file, you'll need to authenticate the first time (and every time the access token expires) by using the `auth.py` script, which will ask you to enter your username, password and, if needed, your 2FA code you receive via SMS. Once this step has been taken care of, you can use the bundled utility script to start, stop and check the bot's status:
