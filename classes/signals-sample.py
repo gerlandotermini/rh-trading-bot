@@ -152,8 +152,9 @@ class signals:
         # Trailing Stop Loss
         # Sell an asset when its price dips below the trailing stop loss threshold
         #
-        # Params: tsl_percentage
+        # Params: profit_percentage, tsl_percentage
 
         return( 
-            data.iloc[ -1 ][ asset.ticker ] < data.loc[ data.timestamp > asset.timestamp ][ asset.ticker ].max() * ( 1 - config[ 'trade_signals' ][ 'sell' ][ 'params' ][ 'tsl_percentage' ] )
+            data.iloc[ -1 ][ asset.ticker ] < data.loc[ data.timestamp > asset.timestamp ][ asset.ticker ].max() * ( 1 - config[ 'trade_signals' ][ 'sell' ][ 'params' ][ 'tsl_percentage' ] ) and
+            data.iloc[ -1 ][ asset.ticker ] >= asset.price + (  asset.price * config[ 'trade_signals' ][ 'sell' ][ 'params' ][ 'profit_percentage' ] )
         )

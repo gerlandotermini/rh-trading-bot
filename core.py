@@ -218,7 +218,7 @@ class bot:
 
                 if a_asset.status == 'B':
                     # Is it time to sell this asset? ( Stop-loss: is the current price below the purchase price by the percentage defined in the config file? )
-                    if not is_trading_locked and ( getattr( self.signal, 'sell_' + str(  config[ 'trade_signals' ][ 'sell' ][ 'function' ] ) )( a_asset, self.data ) or self.data.iloc[ -1 ][ a_asset.ticker ] < a_asset.price - ( a_asset.price * config[ 'assets' ][ 'stop_loss_threshold' ] ) ):
+                    if not is_trading_locked and ( getattr( self.signal, 'sell_' + str( config[ 'trade_signals' ][ 'sell' ][ 'function' ] ) )( a_asset, self.data ) or self.data.iloc[ -1 ][ a_asset.ticker ] < a_asset.price - ( a_asset.price * config[ 'assets' ][ 'stop_loss_threshold' ] ) ):
                         self.sell( a_asset )
                         # During the following iteration we will confirm if this limit order was actually executed, and update the available cash balance accordingly
 
@@ -235,7 +235,7 @@ class bot:
 
         # Final status for this iteration
         print( '-- Bot Status ---------------------------' )
-        print( 'Iteration completed on ' +str( datetime.now().strftime( '%Y-%m-%d %H:%M' ) ) )
+        print( 'Iteration completed on ' + str( now.strftime( '%Y-%m-%d %H:%M' ) ) )
         print( 'Buying power: $' + str( self.available_cash ) )
         print( '-- Data Snapshot ------------------------' )
         print( self.data.tail() )
@@ -411,7 +411,7 @@ class bot:
         if self.data_has_gaps( now ) and not self.init_data():
             return False
 
-        new_row = { 'timestamp': pd.Timestamp.now }
+        new_row = { 'timestamp': pd.Timestamp( now ) }
 
         # Calculate moving averages and RSI values
         for a_kraken_ticker, a_robinhood_ticker in config[ 'ticker_list' ].items():
