@@ -125,7 +125,7 @@ class bot:
         if not config[ 'bot' ][ 'simulate_api_calls' ]:
             try:
                 print( 'Logging in to Robinhood' )
-                rh_response = rh.login( config[ 'bot' ][ 'username' ], config[ 'bot' ][ 'password' ],  )
+                rh_response = rh.login( config[ 'bot' ][ 'username' ], config[ 'bot' ][ 'password' ] )
             except:
                 print( 'Got exception while attempting to log into Robinhood.' )
                 exit()
