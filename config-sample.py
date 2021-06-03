@@ -41,9 +41,9 @@ config = {
         'rsi_period': 14
     },
     'assets': {
-        'buy_amount_per_trade': { # if greater than zero, buy no less/no more than this amount of coin, otherwise use all the cash in the account
-            'min': 0.0,
-            'max': 0.0
+        'buy_amount_per_trade': {
+            'min': 1.0, # buy at least $1 worth of coin
+            'max': 0.0 # if greater than zero, buy no more than this amount of coin, otherwise use all the cash in the account
         },
         'reserve': 0.0, # tell the bot if you don't want it to use all of the available cash in your account
         'stop_loss_threshold': 0.3 # sell if the price drops at least 30% below the purchase price

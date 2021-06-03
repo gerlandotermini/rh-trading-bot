@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -u
 
 # Crypto Trading Bot
-# Version: 1.6
+# Version: 1.6.1
 # Credits: https://github.com/JasonRBowling/cryptoTradingBot/
 
 from config import config
@@ -253,7 +253,7 @@ class bot:
         timer_handle.join()
 
     def buy( self, ticker ):
-        if self.available_cash == 0 or self.available_cash < config[ 'assets' ][ 'buy_amount_per_trade' ][ 'min' ] or ( config[ 'assets' ][ 'buy_amount_per_trade' ][ 'max' ] > 0 and self.available_cash < config[ 'assets' ][ 'buy_amount_per_trade' ][ 'max' ] ):
+        if self.available_cash == 0 or self.available_cash < config[ 'assets' ][ 'buy_amount_per_trade' ][ 'min' ]:
             return False
         
         # Retrieve the actual ask price from Robinhood
@@ -274,7 +274,7 @@ class bot:
         price_precision = round( floor( price / self.min_price_increments[ ticker ] ) * self.min_price_increments[ ticker ], 7 )
         
         # How much to buy depends on the configuration
-        quantity = ( self.available_cash if ( config[ 'assets' ][ 'buy_amount_per_trade' ][ 'max' ] == 0 ) else config[ 'assets' ][ 'buy_amount_per_trade' ][ 'max' ] ) / price_precision
+        quantity = ( self.available_cash if ( config[ 'assets' ][ 'buy_amount_per_trade' ][ 'max' ] == 0 ) else min( self.available_cash, config[ 'assets' ][ 'buy_amount_per_trade' ][ 'max' ] ) ) / price_precision
         quantity = round( floor( quantity / self.min_share_increments[ ticker ] ) * self.min_share_increments[ ticker ], 7 )
 
         if config[ 'bot' ][ 'trades_enabled' ] and not config[ 'bot' ][ 'simulate_api_calls' ]:
