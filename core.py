@@ -162,6 +162,9 @@ class bot:
             exit()
 
         now = datetime.now()
+        
+        # Update available cash just in case human buys manually
+        self.update_available_cash()
 
         # We don't have enough consecutive data points to decide what to do
         is_trading_locked = not self.get_new_data( now )
@@ -456,7 +459,6 @@ class bot:
 
             elif self.data.shape[ 0 ] > 0:
                 self.data[ a_robinhood_ticker + '_SMA_F' ] = self.data[ a_robinhood_ticker ].rolling( window = config[ 'ta' ][ 'moving_average_periods' ][ 'sma_fast' ] ).mean()
-                self.data[ a_robinhood_ticker + '_SMA_S' ] = self.data[ a_robinhood_ticker ].rolling( window = config[ 'ta' ][ 'moving_average_periods' ][ 'sma_slow' ] ).mean()
                 self.data[ a_robinhood_ticker + '_SMA_S' ] = self.data[ a_robinhood_ticker ].rolling( window = config[ 'ta' ][ 'moving_average_periods' ][ 'sma_slow' ] ).mean()
                 self.data[ a_robinhood_ticker + '_EMA_F' ] = self.data[ a_robinhood_ticker ].ewm( span = config[ 'ta' ][ 'moving_average_periods' ][ 'ema_fast' ], adjust = False, min_periods = config[ 'ta' ][ 'moving_average_periods' ][ 'ema_fast' ]).mean()
                 self.data[ a_robinhood_ticker + '_EMA_S' ] = self.data[ a_robinhood_ticker ].ewm( span = config[ 'ta' ][ 'moving_average_periods' ][ 'ema_slow' ], adjust = False, min_periods = config[ 'ta' ][ 'moving_average_periods' ][ 'ema_slow' ]).mean()
