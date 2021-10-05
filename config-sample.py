@@ -2,6 +2,7 @@ config = {
     'bot': {
         'username': "", # Robinhood credentials. If you don't want to keep them stored here, launch "./2fa.py" to setup the access token interactively
         'password': "",
+        'totp': '',
         'trades_enabled': False, # if False, just collect data
         'simulate_api_calls': False, # if enabled, just pretend to connect to Robinhood
         'data_source': 'robinhood', # which platform to use to track prices: kraken or robinhood

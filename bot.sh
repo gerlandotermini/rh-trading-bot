@@ -9,7 +9,11 @@ start() {
         /usr/bin/nohup ./core.py > status.log 2>&1 &
         sleep 3
         BOTPID=`ps -ef | grep '/usr/bin/python[3] -u ./core.py' | awk '{ print $2 }'`
-        echo "[PID:$BOTPID] Bot started."
+        if [ -z "$BOTPID" ]; then
+            echo "Unable to start bot."
+        else
+            echo "[PID:$BOTPID] Bot started."
+        fi
     else
         echo "Bot already running. Did you mean 'restart'?"
     fi

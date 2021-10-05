@@ -11,13 +11,13 @@ To use Jason's words: cryptocurrency investing is *risky*! Doing it using a comp
 For U.S. customers, most of the exchanges available out there require a complex verification process, and on top of that they won't allow direct ACH deposits from your bank accounts (have you seen how cumbersome it is to transfer funds to your Kraken account?). Or the ones that do, provide limited API access to work with bots. By combining Kraken's performance with Robinhood's ease of use, I thought this would put the best of both worlds to good use.
 
 ## Installation
-You'll need access to a working Python3 interpreter. For the sake of simplicity, I am going to assume that you know your way around a Linux shell, and that you have [pip3](https://linuxize.com/post/how-to-install-pip-on-ubuntu-18.04/#installing-pip-for-python-3) on your machine. Install the following dependencies:
-* [Robin-Stock](http://www.robin-stocks.com/en/latest/quickstart.html): `pip3 install robin_stocks`
+You'll need access to a working Python 3.x interpreter. These instructions assume that you know your way around a Linux shell, and that you have [pip3](https://linuxize.com/post/how-to-install-pip-on-ubuntu-18.04/#installing-pip-for-python-3) on your machine. Install the following dependencies:
+* [Robin-Stock 2.x](http://www.robin-stocks.com/en/latest/quickstart.html): `pip3 install robin_stocks`
 * [Pandas](https://pandas.pydata.org/pandas-docs/stable/index.html): `pip3 install pandas`
 * [TA-Lib](https://www.ta-lib.org/): download their tarball and compile it
 
 Once you have all the dependencies in place, clone this repo somewhere on your machine, copy `config-sample.py` to `config.py`, and `classes/signals-sample.py` to `classes/signals.py`. Then edit your config file to customize the bot's behavior:
-* (string) `username` and `password`: Robinhood credentials (optional, see **Running the bot** here below)
+* (string) `username`, `password` and `totp`: Robinhood credentials and OTP token
 * (bool) `trades_enabled`:  If False, run in test mode and just collect data, otherwise submit orders
 * (bool) `simulate_api_calls`: Simulate connections to Kraken and Robinhood APIs (by generating random values for all API calls)
 * (string) `data_source`: Choose which service to use to track prices
@@ -34,7 +34,7 @@ Once you have all the dependencies in place, clone this repo somewhere on your m
 * (float) `stop_loss_threshold`: Threshold below which the bot will sell its holdings, regardless of any gains
 
 ## Running the bot
-If you have 2FA enabled, or you prefer not to store your Robinhood credentials in a file, you'll need to authenticate the first time (and every time the access token expires) by using the `auth.py` script, which will ask you to enter your username, password and, if needed, your 2FA code you receive via SMS. Once this step has been taken care of, you can use the bundled utility script to start, stop and check the bot's status:
+You will need to enable MFA in your account. In your dashboard, go to Account > Settings > Security and Privacy > Two-Factor Authentication. Robinhood will ask you if you want to use SMS/Text or a two-factor authentication app. Select "Authenticator App": you will be shown a QR code, and next to it a link to reveal the alphanumeric string associated with that QR code. Copy and paste this string in your `config.py` as the value for the **totp** parameter. Once this step has been taken care of, you can use the bundled script to start, stop and check the bot's status:
 
 * `./bot.sh start` will run the bot in the background (even after you close your terminal window)
 * `./bot.sh stop` will stop the background process

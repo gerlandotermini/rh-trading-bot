@@ -1,7 +1,7 @@
 #!/usr/bin/python3 -u
 
 # Crypto Trading Bot
-# Version: 1.6.1
+# Version: 1.7
 # Credits: https://github.com/JasonRBowling/cryptoTradingBot/
 
 from config import config
@@ -15,9 +15,10 @@ import numpy as np
 from os import path, makedirs
 import pandas as pd
 import pickle
+import pyotp
 from random import randint
 from requests import get as get_json
-import robin_stocks as rh
+import robin_stocks.robinhood as rh
 import signal
 from talib import EMA, RSI, MACD
 from threading import Timer
@@ -28,6 +29,7 @@ class bot:
         'bot': {
             'username': "",
             'password': "",
+            'totp': "",
             'trades_enabled': False,
             'simulate_api_calls': False,
             'data_source': 'robinhood',
@@ -125,9 +127,11 @@ class bot:
         if not config[ 'bot' ][ 'simulate_api_calls' ]:
             try:
                 print( 'Logging in to Robinhood' )
-                rh_response = rh.login( config[ 'bot' ][ 'username' ], config[ 'bot' ][ 'password' ] )
-            except:
+                totp = pyotp.TOTP( config[ 'bot' ][ 'totp' ] ).now()
+                rh_response = rh.login( config[ 'bot' ][ 'username' ], config[ 'bot' ][ 'password' ], mfa_code = totp )
+            except Exception as e:
                 print( 'Got exception while attempting to log into Robinhood.' )
+                print( e )
                 exit()
 
         # Download Robinhood parameters
